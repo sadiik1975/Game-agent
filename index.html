@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f5f7f4">
+  <title>Central Orchestrator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="brand-lockup">
+        <div class="brand-mark">CO</div>
+        <div>
+          <strong>Central</strong>
+          <span>Orchestrator</span>
+        </div>
+      </div>
+
+      <div class="workspace-switcher">
+        <span class="eyebrow">Workspace</span>
+        <button class="workspace-button" type="button"><span class="workspace-dot"></span> Personal OS <span class="chevron">⌄</span></button>
+      </div>
+
+      <nav class="nav-list">
+        <span class="nav-label">Command center</span>
+        <button class="nav-item active" data-view="command"><span class="nav-icon">◈</span>Overview</button>
+        <button class="nav-item" data-view="inbox"><span class="nav-icon">✉</span>Inbox <span class="nav-count">3</span></button>
+        <button class="nav-item" data-view="calendar"><span class="nav-icon">□</span>Calendar</button>
+        <button class="nav-item" data-view="meetings"><span class="nav-icon">◌</span>Meetings</button>
+        <button class="nav-item" data-view="tasks"><span class="nav-icon">✓</span>Tasks</button>
+        <span class="nav-label second-label">Operations</span>
+        <button class="nav-item" data-view="business"><span class="nav-icon">▣</span>Businesses</button>
+        <button class="nav-item" data-view="opportunities"><span class="nav-icon">✦</span>Opportunities</button>
+        <button class="nav-item" data-view="checkpoints"><span class="nav-icon">↳</span>Checkpoints <span class="nav-count muted">4</span></button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="proactive-card">
+          <div class="status-line"><span class="pulse-dot"></span><span>System ready</span></div>
+          <p>Monitoring is quiet until a source is connected.</p>
+          <button class="text-link" data-view-link="settings">Review connections <span>→</span></button>
+        </div>
+        <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span>Settings</button>
+        <div class="profile"><div class="avatar">SB</div><div><strong>Sam Bennett</strong><span>Personal workspace</span></div><span class="more">•••</span></div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="breadcrumb"><span>Workspace</span><span>/</span><strong id="page-title">Overview</strong></div>
+        <div class="topbar-actions"><button class="icon-button" title="Activity log" data-view="activity">◷</button><button class="icon-button" title="Toggle theme" id="theme-toggle">☼</button><div class="top-avatar">SB</div></div>
+      </header>
+
+      <div class="content-wrap">
+        <section class="welcome-row">
+          <div><p class="date-label" id="today-label">THURSDAY, SEPTEMBER 24, 2026</p><h1>Good morning, Sam.</h1><p class="lede">Here is the clearest path through your day.</p></div>
+          <div class="briefing-status"><span class="status-check">✓</span><span><strong>Briefing ready</strong><small>Updated just now</small></span></div>
+        </section>
+
+        <section class="command-bar-section">
+          <div class="command-bar"><span class="spark">✦</span><input id="command-input" type="text" placeholder="What do you need to make progress on?" aria-label="Command bar"><kbd>⌘ K</kbd><button id="command-submit" aria-label="Run command">→</button></div>
+          <div class="command-suggestions"><button data-command="What do I have today?">What do I have today?</button><button data-command="Show paused workflows">Show paused workflows</button><button data-command="What am I waiting on?">What am I waiting on?</button></div>
+        </section>
+
+        <section class="next-action-panel" id="next-action-panel">
+          <div class="section-kicker"><span class="kicker-line"></span><span>NEXT ACTION</span><span class="kicker-badge">1 focused step</span></div>
+          <div class="next-action-body"><div class="action-number">01</div><div class="action-copy"><h2 id="next-action-title">Review the meeting purpose</h2><p id="next-action-description">Get clear on the outcome before you open another tab.</p><div class="action-context"><span class="context-icon">◌</span><span>Client discovery · Meeting preparation</span><span class="context-dot">·</span><span>15 min</span></div></div><div class="action-controls"><button class="primary-button" id="start-action">Start step <span>→</span></button><button class="subtle-button" id="pause-action">Pause</button><button class="more-button" title="More actions">•••</button></div></div>
+          <div class="progress-track"><span id="next-progress"></span></div>
+        </section>
+
+        <div class="dashboard-grid">
+          <section class="panel today-panel"><div class="panel-heading"><div><span class="section-kicker">TODAY</span><h2>Thursday, Sep 24</h2></div><button class="panel-link" data-view="calendar">View calendar <span>→</span></button></div><div class="agenda-item"><span class="agenda-time">09:30</span><span class="agenda-rule"></span><div><strong>Deep work</strong><p>Proposal outline · 45 min</p></div><span class="agenda-tag soft">Focus</span></div><div class="agenda-item"><span class="agenda-time">13:00</span><span class="agenda-rule accent-rule"></span><div><strong>Client discovery call</strong><p>Zoom · 3 attendees</p></div><span class="agenda-tag">Prepare</span></div><div class="agenda-item"><span class="agenda-time">16:00</span><span class="agenda-rule"></span><div><strong>Send revised proposal</strong><p>Due today · Action required</p></div><span class="agenda-tag warning">Due</span></div></section>
+
+          <section class="panel signal-panel"><div class="panel-heading"><div><span class="section-kicker">SIGNALS</span><h2>Worth your attention</h2></div><button class="dots-button">•••</button></div><div class="signal-item"><span class="signal-icon coral">✉</span><div><strong>3 emails need a reply</strong><p>Most recent from Jordan Lee · 18m ago</p></div><span class="signal-arrow">→</span></div><div class="signal-item"><span class="signal-icon green">✦</span><div><strong>New funding opportunity</strong><p>Matches your Been Ventures profile</p></div><span class="signal-arrow">→</span></div><div class="signal-item"><span class="signal-icon blue">↳</span><div><strong>Waiting on 2 people</strong><p>Follow up tomorrow if no response</p></div><span class="signal-arrow">→</span></div></section>
+        </div>
+
+        <section class="lower-grid"><section class="panel workflow-panel"><div class="panel-heading"><div><span class="section-kicker">ACTIVE WORKFLOWS</span><h2>Keep the thread</h2></div><button class="panel-link" data-view="checkpoints">See all <span>→</span></button></div><div id="workflow-list"></div><button class="add-workflow" id="add-workflow">+ Start a workflow</button></section><section class="panel connected-panel"><div class="panel-heading"><div><span class="section-kicker">CONNECTIONS</span><h2>Source status</h2></div><button class="panel-link" data-view="settings">Manage <span>→</span></button></div><div class="connection-row"><span class="connection-logo google">G</span><div><strong>Google Workspace</strong><p>Email · Calendar · Drive</p></div><span class="not-connected">Not connected</span></div><div class="connection-row"><span class="connection-logo zoom">◉</span><div><strong>Zoom</strong><p>Meetings · Recordings</p></div><span class="not-connected">Not connected</span></div><div class="privacy-note"><span>⌁</span> Nothing is monitored until you authorize a connection.</div></section></section>
+
+        <section class="activity-strip"><div class="activity-title"><span class="section-kicker">ACTIVITY</span><strong>Transparent by design</strong></div><div id="activity-list"></div><button class="panel-link" data-view="activity">Open log <span>→</span></button></section>
+      </div>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>
