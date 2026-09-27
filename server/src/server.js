@@ -559,6 +559,18 @@ app.post('/api/approvals', (req, res) => {
   });
 });
 
+const providerBaseUrl = (configuredUrl, fallbackUrl) => {
+  try {
+    const url = new URL(configuredUrl || fallbackUrl);
+
+    if (url.protocol === 'https:' && url.hostname) {
+      return url.toString().replace(/\/+$/, '');
+    }
+  } catch {}
+
+  return fallbackUrl;
+};
+
 const requestChatCompletion = async ({
   provider,
   baseUrl,
@@ -660,7 +672,10 @@ app.post('/api/chat', async (req, res) => {
     try {
       return res.json(await requestChatCompletion({
         provider: 'openrouter',
-        baseUrl: process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1',
+        baseUrl: providerBaseUrl(
+          process.env.OPENROUTER_API_URL,
+          'https://openrouter.ai/api/v1'
+        ),
         apiKey: openRouterKey,
         model: process.env.OPENROUTER_MODEL || 'openrouter/free',
         messages: providerMessages
@@ -674,7 +689,10 @@ app.post('/api/chat', async (req, res) => {
     try {
       return res.json(await requestChatCompletion({
         provider: 'groq',
-        baseUrl: process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1',
+        baseUrl: providerBaseUrl(
+          process.env.GROQ_API_URL,
+          'https://api.groq.com/openai/v1'
+        ),
         apiKey: groqKey,
         model: process.env.GROQ_MODEL || 'qwen/qwen3.8-27b',
         messages: providerMessages
