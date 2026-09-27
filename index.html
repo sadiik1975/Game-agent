@@ -3,89 +3,376 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#f5f7f4">
-  <title>Central Orchestrator</title>
+  <meta name="theme-color" content="#f4f7f5">
+  <title>Nexus / Fuse - Personal Business Agent</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Primary navigation">
       <div class="brand-lockup">
-        <div class="brand-mark">CO</div>
-        <div>
-          <strong>Central</strong>
-          <span>Orchestrator</span>
+        <div class="brand-mark">✦</div>
+        <div class="brand-copy">
+          <span class="eyebrow">MY ASSISTANT</span>
+          <strong>Business Agent</strong>
         </div>
       </div>
 
       <div class="workspace-switcher">
-        <span class="eyebrow">Workspace</span>
-        <button class="workspace-button" type="button"><span class="workspace-dot"></span> Personal OS <span class="chevron">⌄</span></button>
+        <span class="eyebrow muted-label">Workspace</span>
+        <button class="workspace-button" type="button">
+          <span class="workspace-dot"></span>
+          <span>Personal OS</span>
+          <span class="chevron">⌄</span>
+        </button>
       </div>
 
-      <nav class="nav-list">
-        <span class="nav-label">Command center</span>
-        <button class="nav-item active" data-view="command"><span class="nav-icon">◈</span>Overview</button>
-        <button class="nav-item" data-view="inbox"><span class="nav-icon">✉</span>Inbox <span class="nav-count">3</span></button>
-        <button class="nav-item" data-view="calendar"><span class="nav-icon">□</span>Calendar</button>
-        <button class="nav-item" data-view="meetings"><span class="nav-icon">◌</span>Meetings</button>
-        <button class="nav-item" data-view="tasks"><span class="nav-icon">✓</span>Tasks</button>
+      <nav class="nav-list" aria-label="Main navigation">
+        <button class="nav-label nav-label-button" type="button" data-view="command">Command center</button>
+        <button class="nav-item active" data-view="command"><span class="nav-icon">⌂</span>Home</button>
+        <button class="nav-item" data-view="search"><span class="nav-icon">⌕</span>Search</button>
+        <button class="nav-item" data-view="calendar"><span class="nav-icon">◫</span>Calendar</button>
+        <button class="nav-item" data-view="inbox"><span class="nav-icon">✉</span>Inbox</button>
+        <button class="nav-item" data-view="contacts"><span class="nav-icon">◌</span>Contacts</button>
+
         <span class="nav-label second-label">Operations</span>
-        <button class="nav-item" data-view="business"><span class="nav-icon">▣</span>Businesses</button>
-        <button class="nav-item" data-view="opportunities"><span class="nav-icon">✦</span>Opportunities</button>
-        <button class="nav-item" data-view="checkpoints"><span class="nav-icon">↳</span>Checkpoints <span class="nav-count muted">4</span></button>
+        <button class="nav-item" data-view="business"><span class="nav-icon">▣</span>Business</button>
+        <button class="nav-item" data-view="automation"><span class="nav-icon">✦</span>Automation</button>
+        <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span>Settings</button>
       </nav>
 
       <div class="sidebar-bottom">
-        <div class="proactive-card">
-          <div class="status-line"><span class="pulse-dot"></span><span>System ready</span></div>
-          <p>Monitoring is quiet until a source is connected.</p>
-          <button class="text-link" data-view-link="settings">Review connections <span>→</span></button>
+        <div class="mini-panel">
+          <div class="mini-panel-row">
+            <span class="pulse-dot"></span>
+            <span>Assistant awake</span>
+          </div>
+          <p>Quietly tracking the next right move.</p>
         </div>
-        <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span>Settings</button>
-        <div class="profile"><div class="avatar">SB</div><div><strong>Sam Bennett</strong><span>Personal workspace</span></div><span class="more">•••</span></div>
+
+        <div class="profile">
+          <div class="avatar">SB</div>
+          <div class="profile-copy">
+            <strong>Sam Bennett</strong>
+            <span>Personal workspace</span>
+          </div>
+        </div>
       </div>
     </aside>
 
     <main class="main-content">
-      <header class="topbar">
-        <div class="breadcrumb"><span>Workspace</span><span>/</span><strong id="page-title">Overview</strong></div>
-        <div class="topbar-actions"><button class="icon-button" title="Activity log" data-view="activity">◷</button><button class="icon-button" title="Toggle theme" id="theme-toggle">☼</button><div class="top-avatar">SB</div></div>
+      <header class="topbar nexus-topbar">
+        <button class="icon-button menu-trigger" id="drawer-open" type="button" aria-label="Open control center" title="Control center">☰</button>
+        <div class="breadcrumb">
+          <span>Workspace</span>
+          <span>/</span>
+          <strong id="page-title">Home</strong>
+        </div>
+        <div class="live-status"><span class="pulse-dot"></span><span>Workspace online</span></div>
+        <div class="nexus-brand-pill" aria-label="Nexus, powered by Fuse">
+          <span class="fuse-orb" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span><strong>NEXUS</strong><small>powered by Fuse</small></span>
+          <button class="speech-toggle" id="speech-toggle" type="button" aria-label="Toggle voice responses" aria-pressed="false" title="Voice responses">◖))</button>
+        </div>
+        <button class="invite-button" id="invite-button" type="button">Invite <span aria-hidden="true">↗</span></button>
       </header>
 
       <div class="content-wrap">
-        <section class="welcome-row">
-          <div><p class="date-label" id="today-label">THURSDAY, SEPTEMBER 24, 2026</p><h1>Good morning, Sam.</h1><p class="lede">Here is the clearest path through your day.</p></div>
-          <div class="briefing-status"><span class="status-check">✓</span><span><strong>Briefing ready</strong><small>Updated just now</small></span></div>
+        <section class="hero-row">
+          <div>
+            <p class="date-label" id="today-label">FRIDAY, SEPTEMBER 25, 2026</p>
+            <h1>Make room for<br><em>your next move.</em></h1>
+          </div>
+          <div class="assistant-pill">
+            <span class="pill-dot"></span>
+            <span>Fuse is thinking with you</span>
+          </div>
         </section>
 
-        <section class="command-bar-section">
-          <div class="command-bar"><span class="spark">✦</span><input id="command-input" type="text" placeholder="What do you need to make progress on?" aria-label="Command bar"><kbd>⌘ K</kbd><button id="command-submit" aria-label="Run command">→</button></div>
-          <div class="command-suggestions"><button data-command="What do I have today?">What do I have today?</button><button data-command="Show paused workflows">Show paused workflows</button><button data-command="What am I waiting on?">What am I waiting on?</button></div>
+        <section class="tab-view active" id="chat-view" aria-label="Chat">
+          <div class="view-intro"><span class="eyebrow">YOUR COMMAND CENTER</span><h2>A little clarity goes a long way.</h2><p>Bring the messy version. We can work from there.</p></div>
+          <div class="chat-stage" id="chat-stage">
+            <div class="chat-transcript" aria-label="Conversation with your assistant">
+              <div class="chat-heading"><span class="eyebrow">CONVERSATION</span><span>Private workspace</span><button class="secondary-action" id="clear-chat" type="button">Clear conversation</button></div>
+              <div id="chat-messages" class="chat-messages"></div>
+            </div>
+          </div>
         </section>
 
-        <section class="next-action-panel" id="next-action-panel">
-          <div class="section-kicker"><span class="kicker-line"></span><span>NEXT ACTION</span><span class="kicker-badge">1 focused step</span></div>
-          <div class="next-action-body"><div class="action-number">01</div><div class="action-copy"><h2 id="next-action-title">Review the meeting purpose</h2><p id="next-action-description">Get clear on the outcome before you open another tab.</p><div class="action-context"><span class="context-icon">◌</span><span>Client discovery · Meeting preparation</span><span class="context-dot">·</span><span>15 min</span></div></div><div class="action-controls"><button class="primary-button" id="start-action">Start step <span>→</span></button><button class="subtle-button" id="pause-action">Pause</button><button class="more-button" title="More actions">•••</button></div></div>
-          <div class="progress-track"><span id="next-progress"></span></div>
+        <section class="tab-view" id="news-view" aria-label="News" hidden>
+          <div class="news-heading-row">
+            <div class="view-intro"><span class="eyebrow">LIVE SIGNALS / BUSINESS OPPORTUNITY</span><h2>News you can act on.</h2><p>AI agents, emerging tech, robotics, stocks, and crypto.</p></div>
+            <button class="primary-action" id="refresh-news" type="button">Refresh news</button>
+          </div>
+          <section class="news-skills" aria-label="Your skills">
+            <label for="news-skills-input">About me, my work, and my goals</label>
+            <div class="news-skills-row"><textarea id="news-skills-input" rows="3" maxlength="2000" placeholder="Add anything useful: skills, services, experience, customers, goals, tools, budget, or limits."></textarea><button class="secondary-action" id="save-news-skills" type="button">Save</button></div>
+            <p>Saved in this browser and used to personalize chat and “Monetize this” ideas.</p>
+          </section>
+          <div class="news-toolbar">
+            <span id="news-status" role="status">Loading live headlines...</span>
+            <label for="news-category-filter">Topic
+              <select id="news-category-filter"><option value="all">All topics</option><option value="ai">AI &amp; agents</option><option value="robotics">Robotics</option><option value="markets">Markets &amp; stocks</option><option value="crypto">Crypto</option></select>
+            </label>
+          </div>
+          <div class="news-list" id="news-list"><p class="empty-state">Loading headlines...</p></div>
         </section>
 
-        <div class="dashboard-grid">
-          <section class="panel today-panel"><div class="panel-heading"><div><span class="section-kicker">TODAY</span><h2>Thursday, Sep 24</h2></div><button class="panel-link" data-view="calendar">View calendar <span>→</span></button></div><div class="agenda-item"><span class="agenda-time">09:30</span><span class="agenda-rule"></span><div><strong>Deep work</strong><p>Proposal outline · 45 min</p></div><span class="agenda-tag soft">Focus</span></div><div class="agenda-item"><span class="agenda-time">13:00</span><span class="agenda-rule accent-rule"></span><div><strong>Client discovery call</strong><p>Zoom · 3 attendees</p></div><span class="agenda-tag">Prepare</span></div><div class="agenda-item"><span class="agenda-time">16:00</span><span class="agenda-rule"></span><div><strong>Send revised proposal</strong><p>Due today · Action required</p></div><span class="agenda-tag warning">Due</span></div></section>
+        <section class="tab-view" id="ideas-view" aria-label="Ideas" hidden>
+          <div class="view-intro ideas-heading"><div><span class="eyebrow">A GOOD PLACE TO START</span><h2>Possibility, made practical.</h2><p>Growth ideas shaped for a business that still feels like yours.</p></div><button class="primary-action idea-generate" id="generate-idea" type="button"><span>✳</span> Generate an idea</button></div>
+          <div class="ideas-list" id="ideas-list"><p class="empty-state" id="ideas-empty">Generate an idea to get a current opportunity based on live news and your saved business context.</p></div>
+        </section>
 
-          <section class="panel signal-panel"><div class="panel-heading"><div><span class="section-kicker">SIGNALS</span><h2>Worth your attention</h2></div><button class="dots-button">•••</button></div><div class="signal-item"><span class="signal-icon coral">✉</span><div><strong>3 emails need a reply</strong><p>Most recent from Jordan Lee · 18m ago</p></div><span class="signal-arrow">→</span></div><div class="signal-item"><span class="signal-icon green">✦</span><div><strong>New funding opportunity</strong><p>Matches your Been Ventures profile</p></div><span class="signal-arrow">→</span></div><div class="signal-item"><span class="signal-icon blue">↳</span><div><strong>Waiting on 2 people</strong><p>Follow up tomorrow if no response</p></div><span class="signal-arrow">→</span></div></section>
+        <section class="command-area assistant-taskbar">
+          <input id="context-file" type="file" accept=".txt,.md,.csv,.json,text/plain,text/markdown,text/csv,application/json" hidden>
+          <div class="command-bar" id="command-bar" aria-label="Command bar">
+            <button class="attach-button" type="button" id="attach-button" aria-label="Add context" title="Add context">＋</button>
+            <input id="command-input" type="text" placeholder="Search or tell me what you need..." aria-label="Search or tell me what you need">
+            <button class="voice-button" type="button" aria-label="Speak your message" title="Speak your message">◉</button>
+            <button class="submit-button" id="command-submit" type="button" aria-label="Submit command" title="Send">↑</button>
+          </div>
+          <p class="command-input-hint">Type a message or use the microphone to speak.</p>
+
+          <div class="command-suggestions">
+            <button class="suggestion" type="button" data-command="What should I focus on today?">Today's schedule</button>
+            <button class="suggestion" type="button" data-command="News digest" data-action="open-news">News digest</button>
+            <button class="suggestion" type="button" data-command="Check inbox" data-action="open-inbox">Check inbox</button>
+            <button class="suggestion" type="button" data-command="Help me choose one useful next step for my business.">Find a next step</button>
+          </div>
+        </section>
+
+        <section class="tab-view inbox-view" id="inbox-view" aria-labelledby="inbox-heading" hidden>
+          <div class="view-heading">
+            <div>
+              <span class="eyebrow">INBOX / NOTIFICATIONS</span>
+              <h2 id="inbox-heading">Your signal, not the noise.</h2>
+              <p>Messages and system updates from connected sources.</p>
+            </div>
+            <button class="primary-action" type="button" id="load-inbox">Refresh inbox</button>
+          </div>
+          <section class="auto-reply-settings" aria-label="High-priority auto-replies">
+            <label class="auto-reply-toggle"><input id="auto-reply-high-priority" type="checkbox"><span>Automatically acknowledge emails marked High</span></label>
+            <label for="high-priority-reply-template">Acknowledgment message</label>
+            <textarea id="high-priority-reply-template" rows="2" maxlength="2000">Thanks for your email. I have received it and will review it soon.</textarea>
+            <p>Off by default. When enabled, this sends once to each High-priority Gmail message.</p>
+          </section>
+          <div class="inbox-toolbar">
+            <span id="inbox-status">Not loaded yet.</span>
+            <label class="priority-filter-label" for="inbox-priority-filter">Priority
+              <select id="inbox-priority-filter">
+                <option value="all">All</option>
+                <option value="high">High</option>
+                <option value="normal">Normal</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+            <span>Replies send only when you press Send reply.</span>
+          </div>
+          <div class="inbox-list" id="inbox-list"><p class="empty-state">Choose Inbox, then refresh to load messages.</p></div>
+          <div class="notification-log"><span class="eyebrow">RECENT ACTIVITY</span><div id="notification-activity" class="activity-list"></div></div>
+        </section>
+
+        <section class="tab-view content-view" id="content-view" aria-label="Content" hidden>
+          <div class="view-heading">
+            <div>
+              <span class="eyebrow">PUBLISHING / SOCIAL</span>
+              <h2>Content calendar</h2>
+              <p id="content-daily-count">Loading daily schedule...</p>
+            </div>
+            <button class="primary-action" id="refresh-content" type="button">Refresh</button>
+          </div>
+          <section class="content-connections" aria-label="Publishing connections">
+            <div><strong>LinkedIn</strong><span id="linkedin-content-status">Checking connection...</span></div>
+            <div><strong>Telegram</strong><span id="telegram-content-status">Checking connection...</span></div>
+          </section>
+          <section class="content-composer" aria-label="Create a social post">
+            <label for="content-post-text">Post text</label>
+            <textarea id="content-post-text" rows="6" maxlength="4000" placeholder="Write a post for your audience..."></textarea>
+            <div class="content-compose-controls">
+              <label for="content-platform">Publish to
+                <select id="content-platform"><option value="linkedin">LinkedIn</option><option value="telegram">Telegram</option></select>
+              </label>
+              <label for="content-scheduled-at">Schedule for
+                <input id="content-scheduled-at" type="datetime-local">
+              </label>
+              <button class="secondary-action" id="draft-content" type="button">Save draft</button>
+              <button class="primary-action" id="schedule-content" type="button">Schedule post</button>
+            </div>
+            <button class="inline-action" id="generate-content-draft" type="button">Draft an idea from live news</button>
+            <p id="content-status" role="status"></p>
+          </section>
+          <section class="content-reply-settings" aria-label="Telegram response settings">
+            <label><input id="telegram-auto-reply" type="checkbox"><span>Auto-reply to Telegram replies on posts</span></label>
+            <label for="telegram-reply-template">Reply template</label>
+            <textarea id="telegram-reply-template" rows="2" maxlength="1000"></textarea>
+            <button class="secondary-action" id="save-telegram-reply-settings" type="button">Save reply settings</button>
+            <p>Off by default. LinkedIn comment auto-replies require additional approved LinkedIn API access.</p>
+          </section>
+          <section class="content-queue-section">
+            <div class="panel-header"><div><span class="eyebrow">QUEUE</span><h3>Drafts and scheduled posts</h3></div></div>
+            <div id="content-post-queue" class="content-post-queue"><p class="empty-state">No posts in the queue.</p></div>
+          </section>
+          <section class="content-notifications-section">
+            <div class="panel-header"><div><span class="eyebrow">RESPONSES</span><h3>Post reply notifications</h3></div></div>
+            <div id="content-notifications" class="content-notifications"><p class="empty-state">No post responses yet.</p></div>
+          </section>
+        </section>
+
+        <section class="panel revenue-panel">
+          <div class="panel-header">
+            <div>
+              <span class="eyebrow">REVENUE PATH</span>
+              <h3>ABC Company proposal</h3>
+            </div>
+            <span class="status-badge warning">Needs your decision</span>
+          </div>
+          <p class="panel-description">The next useful outcome is a follow-up conversation, not another research task.</p>
+          <div class="revenue-steps" aria-label="Revenue path progress">
+            <div class="revenue-step complete"><span>1</span><strong>Qualify</strong><small>Done</small></div>
+            <div class="revenue-step active"><span>2</span><strong>Follow up</strong><small>Next</small></div>
+            <div class="revenue-step"><span>3</span><strong>Book call</strong><small>Waiting</small></div>
+            <div class="revenue-step"><span>4</span><strong>Send proposal</strong><small>Waiting</small></div>
+          </div>
+          <div class="revenue-action-row">
+            <span>Draft a personal follow-up from the existing email thread.</span>
+            <button class="primary-action" type="button" id="advance-opportunity">Draft follow-up <span aria-hidden="true">→</span></button>
+          </div>
+        </section>
+
+        <div class="main-grid">
+          <section class="panel response-panel">
+            <div class="panel-header">
+              <span class="eyebrow">AI response</span>
+              <button class="inline-action" type="button" id="review-response">Review</button>
+            </div>
+            <div class="response-body">
+              <h2 id="response-title">Connect a source to get live business data.</h2>
+              <p id="response-summary">Your assistant is ready, but it will not invent emails, leads, or meetings.</p>
+            </div>
+            <div class="result-list" id="result-list"><p class="empty-state">No live results loaded.</p></div>
+          </section>
+
+          <aside class="panel activity-panel">
+            <div class="panel-header compact"><span class="eyebrow">ACTIVE NOW</span></div>
+            <div class="mini-activity-list" id="active-activity"><p class="empty-state">No live tasks running.</p></div>
+            <div class="panel-header recent-header"><span class="eyebrow">RECENT</span></div>
+            <ul class="recent-list" id="recent-activity"><li><span>No recent activity</span></li></ul>
+          </aside>
         </div>
 
-        <section class="lower-grid"><section class="panel workflow-panel"><div class="panel-heading"><div><span class="section-kicker">ACTIVE WORKFLOWS</span><h2>Keep the thread</h2></div><button class="panel-link" data-view="checkpoints">See all <span>→</span></button></div><div id="workflow-list"></div><button class="add-workflow" id="add-workflow">+ Start a workflow</button></section><section class="panel connected-panel"><div class="panel-heading"><div><span class="section-kicker">CONNECTIONS</span><h2>Source status</h2></div><button class="panel-link" data-view="settings">Manage <span>→</span></button></div><div class="connection-row"><span class="connection-logo google">G</span><div><strong>Google Workspace</strong><p>Email · Calendar · Drive</p></div><span class="not-connected">Not connected</span></div><div class="connection-row"><span class="connection-logo zoom">◉</span><div><strong>Zoom</strong><p>Meetings · Recordings</p></div><span class="not-connected">Not connected</span></div><div class="privacy-note"><span>⌁</span> Nothing is monitored until you authorize a connection.</div></section></section>
+        <div class="lower-grid">
+          <section class="panel workflow-panel">
+            <div class="panel-header">
+              <div><span class="eyebrow">WORKFLOWS</span><h3>Keep the thread</h3></div>
+              <button class="inline-action" type="button" id="see-all-workflows">See all</button>
+            </div>
+            <div id="workflow-list" class="workflow-list"></div>
+            <button class="secondary-action" type="button" id="add-workflow">+ Start a workflow</button>
+          </section>
 
-        <section class="activity-strip"><div class="activity-title"><span class="section-kicker">ACTIVITY</span><strong>Transparent by design</strong></div><div id="activity-list"></div><button class="panel-link" data-view="activity">Open log <span>→</span></button></section>
+          <section class="panel integration-panel">
+            <div class="panel-header">
+              <div><span class="eyebrow">Integrations</span><h3>Connected sources</h3></div>
+              <button class="inline-action" type="button" id="manage-integrations">Manage</button>
+            </div>
+            <div id="integration-list"><p class="empty-state">Loading integration status...</p></div>
+          </section>
+        </div>
+
+        <section class="panel autonomy-panel" id="autonomy-controls">
+          <div class="panel-header">
+            <div>
+              <span class="eyebrow">AUTONOMY CONTROLS</span>
+              <h3>Choose what your assistant can send</h3>
+            </div>
+            <span class="status-badge warning">Approval first</span>
+          </div>
+          <p class="panel-description">These choices control whether the assistant drafts, sends, or skips each type of action. They are saved on this device.</p>
+
+          <div class="policy-list">
+            <label class="policy-item" for="email-policy">
+              <span class="policy-icon">✉</span>
+              <span class="policy-copy">
+                <strong>Email replies</strong>
+                <small>Respond to incoming emails on your behalf.</small>
+              </span>
+              <select id="email-policy" class="policy-select" data-policy="email">
+                <option value="ask">Always ask me</option>
+                <option value="auto">Auto-respond</option>
+                <option value="never">Never respond</option>
+              </select>
+            </label>
+
+            <label class="policy-item" for="social-policy">
+              <span class="policy-icon">◎</span>
+              <span class="policy-copy">
+                <strong>Social comments</strong>
+                <small>Write or publish comments on connected social accounts.</small>
+              </span>
+              <select id="social-policy" class="policy-select" data-policy="social">
+                <option value="ask">Always ask me</option>
+                <option value="auto">Auto-comment</option>
+                <option value="never">Never comment</option>
+              </select>
+            </label>
+
+            <label class="policy-item" for="linkedin-policy">
+              <span class="policy-icon">in</span>
+              <span class="policy-copy">
+                <strong>LinkedIn actions</strong>
+                <small>Comment, react, or send messages on LinkedIn.</small>
+              </span>
+              <select id="linkedin-policy" class="policy-select" data-policy="linkedin">
+                <option value="ask">Always ask me</option>
+                <option value="auto">Allow automatically</option>
+                <option value="never">Never take action</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="activity-strip panel">
+          <div class="panel-header compact">
+            <span class="eyebrow">ACTIVITY</span>
+            <strong>Transparent by design</strong>
+          </div>
+          <div id="activity-list" class="activity-list"></div>
+        </section>
       </div>
     </main>
   </div>
-  <div class="toast" id="toast" role="status"></div>
+
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="control-drawer" id="control-drawer" aria-label="Control center" aria-hidden="true">
+    <div class="drawer-heading"><div><span class="eyebrow">NEXUS / CONTROL</span><h2>Control center</h2></div><button class="icon-button" id="drawer-close" type="button" aria-label="Close control center">×</button></div>
+    <div class="agent-monitor"><span class="fuse-orb small-orb" aria-hidden="true"><i></i><i></i><i></i></span><div><strong>Fuse is ready</strong><span>Available for your next move</span></div><span class="pulse-dot"></span></div>
+    <section class="drawer-section"><label class="eyebrow" for="provider-key">MODEL CONNECTION</label><div class="key-entry"><input id="provider-key" type="password" autocomplete="off" placeholder="OpenRouter API key" aria-label="OpenRouter API key"><button id="save-provider-key" type="button" title="Use key for this session">↵</button></div><p class="drawer-note">This key lasts for this browser session. For permanent access, set OPENROUTER_API_KEY in server/.env.</p></section>
+    <section class="drawer-section"><label class="eyebrow" for="speech-voice-select">SPOKEN REPLY VOICE</label><div class="speech-voice-controls"><select id="speech-voice-select" aria-label="Choose spoken reply voice"><option value="">Automatic · most natural available</option></select><button class="secondary-action" id="preview-speech-voice" type="button">Preview</button></div><p class="drawer-note">Voice choices come from your browser and device.</p></section>
+    <section class="drawer-section"><span class="eyebrow">EMAIL CONNECTION</span>
+      <label class="integration-toggle"><span class="integration-mark google-mark">G</span><span><strong>Google Email</strong><small>Inbox connection</small></span><input type="checkbox" data-hook="google"><i></i></label>
+    </section>
+    <section class="drawer-section"><span class="eyebrow">SOCIAL PUBLISHING</span><p class="drawer-note">Connect LinkedIn and Telegram and manage scheduled posts in Content.</p><button class="secondary-action" id="open-content-settings" type="button">Open Content settings</button></section>
+    <section class="drawer-section drawer-preferences"><span class="eyebrow">PREFERENCES</span><div id="drawer-preferences"></div></section>
+    <div class="drawer-bottom"><span class="pulse-dot"></span><span>Agent status</span><strong>Ready</strong></div>
+  </aside>
+
+  <nav class="bottom-tabs" aria-label="Agent views" role="tablist">
+    <button class="bottom-tab active" type="button" role="tab" aria-selected="true" data-tab="chat"><span>◌</span>Chat</button>
+    <button class="bottom-tab" type="button" role="tab" aria-selected="false" data-tab="news"><span>▤</span>News</button>
+    <button class="bottom-tab" type="button" role="tab" aria-selected="false" data-tab="ideas"><span>✳</span>Ideas</button>
+    <button class="bottom-tab" type="button" role="tab" aria-selected="false" data-tab="inbox"><span>✉</span>Inbox</button>
+    <button class="bottom-tab" type="button" role="tab" aria-selected="false" data-tab="content"><span>▣</span>Content</button>
+  </nav>
+
+  <div class="legacy-support" aria-hidden="true">
+    <button type="button" id="theme-toggle" aria-label="Toggle theme">☾</button>
+    <div class="color-picker-wrap"><input id="accent-color-picker" class="color-input" type="color" value="#10a7a0" aria-label="Choose app accent color"><div class="swatch-row"><button class="swatch active" type="button" data-accent="#10a7a0" style="background:#10a7a0"></button><button class="swatch" type="button" data-accent="#6d7cff" style="background:#6d7cff"></button><button class="swatch" type="button" data-accent="#f97316" style="background:#f97316"></button><button class="swatch" type="button" data-accent="#14b8a6" style="background:#14b8a6"></button></div></div>
+  </div>
+
+  <div class="toast" id="toast" aria-live="polite"></div>
   <script src="app.js"></script>
 </body>
 </html>
