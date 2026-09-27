@@ -101,6 +101,11 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS integrations_provider_unique
+  ON integrations(provider)
+`);
+
 const now = () => new Date().toISOString();
 
 const parse = value => {
@@ -111,12 +116,23 @@ const parse = value => {
   }
 };
 
-const serializeWorkflow = row => row && ({
-  ...row,
-  completed_steps: parse(row.completed_steps),
-  remaining_steps: parse(row.remaining_steps),
-  context_snapshot: parse(row.context_snapshot)
-});
+const serializeWorkflow = row => {
+  if (!row) return null;
+
+  const completedSteps = parse(row.completed_steps);
+
+  return {
+    ...row,
+    completed_steps: completedSteps,
+    remaining_steps: parse(row.remaining_steps),
+    context_snapshot: parse(row.context_snapshot),
+    completed: Array.isArray(completedSteps)
+      ? completedSteps.length
+      : row.current_step_number,
+    total: row.total_steps,
+    next: row.next_action
+  };
+};
 
 const log = (
   action,
@@ -382,6 +398,284 @@ app.get('/api/health', (_req, res) =>
   })
 );
 
+app.get('/api/workflows', (_req, res) => {
+  const workflows = db.prepare(
+    'SELECT * FROM workflows ORDER BY updated_at DESC'
+  ).all();
+
+  res.json(workflows.map(serializeWorkflow));
+});
+
+app.post('/api/workflows', (req, res) => {
+  const name = String(req.body?.name || '').trim();
+
+  if (!name || name.length > 160) {
+    return res.status(400).json({
+      error: 'Workflow name is required and must be 160 characters or fewer.'
+    });
+  }
+
+  const id = crypto.randomUUID();
+  const timestamp = now();
+  const nextAction = 'Review the goal and define the first step.';
+
+  db.prepare(`
+    INSERT INTO workflows (
+      id, name, status, current_step, current_step_number,
+      total_steps, completed_steps, remaining_steps, blocked_reason,
+      waiting_for, next_action, last_action, resume_token,
+      context_snapshot, created_at, updated_at
+    ) VALUES (?, ?, 'active', ?, 0, 1, '[]', ?, '', '', ?, '', ?, '{}', ?, ?)
+  `).run(
+    id,
+    name,
+    'Ready to start',
+    JSON.stringify([nextAction]),
+    nextAction,
+    crypto.randomUUID(),
+    timestamp,
+    timestamp
+  );
+
+  log('Workflow created', 'workflow', id, { name });
+  res.status(201).json(serializeWorkflow(
+    db.prepare('SELECT * FROM workflows WHERE id = ?').get(id)
+  ));
+});
+
+app.get('/api/activity', (_req, res) => {
+  const activity = db.prepare(
+    'SELECT * FROM activity_logs ORDER BY id DESC LIMIT 100'
+  ).all();
+
+  res.json(activity.map(item => ({
+    ...item,
+    metadata: parse(item.metadata)
+  })));
+});
+
+app.get('/api/integrations', (_req, res) => {
+  const savedIntegrations = new Map(
+    db.prepare('SELECT * FROM integrations').all()
+      .map(integration => [integration.provider, integration])
+  );
+
+  const definitions = [
+    {
+      provider: 'gmail',
+      label: 'Google Email',
+      detail: 'Connect a Google account to read and reply to email.',
+      connected: Boolean(googleToken)
+    },
+    {
+      provider: 'outlook',
+      label: 'Outlook',
+      detail: 'Connect Microsoft 365 to read Outlook email.',
+      connected: Boolean(process.env.MICROSOFT_ACCESS_TOKEN)
+    },
+    {
+      provider: 'linkedin',
+      label: 'LinkedIn',
+      detail: 'Configure LinkedIn publishing credentials in Render.',
+      connected: Boolean(
+        process.env.LINKEDIN_ACCESS_TOKEN &&
+        process.env.LINKEDIN_AUTHOR_URN
+      )
+    },
+    {
+      provider: 'telegram',
+      label: 'Telegram',
+      detail: 'Configure a Telegram bot and chat in Render.',
+      connected: Boolean(
+        process.env.TELEGRAM_BOT_TOKEN &&
+        process.env.TELEGRAM_CHAT_ID
+      )
+    }
+  ];
+
+  res.json(definitions.map(integration => {
+    const saved = savedIntegrations.get(integration.provider);
+    const revoked = saved?.status === 'revoked';
+
+    return {
+      ...integration,
+      configured: integration.connected && !revoked,
+      status: revoked
+        ? 'revoked'
+        : integration.connected
+          ? 'connected'
+          : 'not_connected',
+      permissions: parse(saved?.permissions || '[]')
+    };
+  }));
+});
+
+app.get('/api/checkpoints', (_req, res) => {
+  const workflows = db.prepare(
+    'SELECT id, name, status, resume_token, updated_at FROM workflows ORDER BY updated_at DESC'
+  ).all();
+
+  res.json(workflows);
+});
+
+app.get('/api/approvals', (_req, res) => {
+  const approvals = db.prepare(
+    'SELECT * FROM approval_requests ORDER BY created_at DESC LIMIT 100'
+  ).all();
+
+  res.json(approvals.map(approval => ({
+    ...approval,
+    details: parse(approval.details)
+  })));
+});
+
+app.post('/api/approvals', (req, res) => {
+  const action = String(req.body?.action || '').trim();
+
+  if (!action || action.length > 200) {
+    return res.status(400).json({
+      error: 'Approval action is required and must be 200 characters or fewer.'
+    });
+  }
+
+  const id = crypto.randomUUID();
+  const timestamp = now();
+  const details = req.body?.details && typeof req.body.details === 'object'
+    ? req.body.details
+    : {};
+
+  db.prepare(`
+    INSERT INTO approval_requests (id, action, status, details, created_at)
+    VALUES (?, ?, 'pending', ?, ?)
+  `).run(id, action, JSON.stringify(details), timestamp);
+
+  log('Approval requested', 'approval', id, { action });
+  res.status(201).json({
+    id,
+    action,
+    status: 'pending',
+    details,
+    created_at: timestamp
+  });
+});
+
+const requestChatCompletion = async ({
+  provider,
+  baseUrl,
+  apiKey,
+  model,
+  messages
+}) => {
+  const response = await fetch(
+    `${baseUrl.replace(/\/+$/, '')}/chat/completions`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        'content-type': 'application/json',
+        ...(provider === 'openrouter' ? {
+          'HTTP-Referer': process.env.WEB_ORIGIN || '',
+          'X-Title': 'Personal Business Agent'
+        } : {})
+      },
+      body: JSON.stringify({ model, messages }),
+      signal: AbortSignal.timeout(55000)
+    }
+  );
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      result.error?.message || `${provider} returned HTTP ${response.status}.`
+    );
+  }
+
+  const text = result.choices?.[0]?.message?.content;
+
+  if (typeof text !== 'string' || !text.trim()) {
+    throw new Error('OpenRouter returned an empty response.');
+  }
+
+  return { text: text.trim(), provider };
+};
+
+app.post('/api/chat', async (req, res) => {
+  const inputMessages = Array.isArray(req.body?.messages)
+    ? req.body.messages
+    : [];
+  const messages = inputMessages
+    .filter(message =>
+      ['user', 'assistant'].includes(message?.role) &&
+      typeof (message?.text || message?.content) === 'string'
+    )
+    .slice(-24)
+    .map(message => ({
+      role: message.role,
+      content: String(message.text || message.content).slice(0, 12000)
+    }));
+
+  if (!messages.length) {
+    return res.status(400).json({
+      error: 'At least one user or assistant message is required.'
+    });
+  }
+
+  const businessContext = String(req.body?.businessContext || '').trim();
+  const providerMessages = [
+    {
+      role: 'system',
+      content: `You are a practical personal business assistant. Be accurate, concise, and transparent about uncertainty. Do not invent emails, leads, meetings, or completed actions. Do not give investment advice.${businessContext ? ` The user's business context is: ${businessContext.slice(0, 2000)}` : ''}`
+    },
+    ...messages
+  ];
+  const openRouterKey =
+    req.get('x-openrouter-api-key') || process.env.OPENROUTER_API_KEY;
+  const groqKey = process.env.GROQ_API_KEY;
+
+  if (!openRouterKey && !groqKey) {
+    return res.status(503).json({
+      error: 'Configure OPENROUTER_API_KEY or GROQ_API_KEY in Render to enable chat.'
+    });
+  }
+
+  let openRouterError;
+
+  if (openRouterKey) {
+    try {
+      return res.json(await requestChatCompletion({
+        provider: 'openrouter',
+        baseUrl: process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1',
+        apiKey: openRouterKey,
+        model: process.env.OPENROUTER_MODEL || 'openrouter/free',
+        messages: providerMessages
+      }));
+    } catch (error) {
+      openRouterError = error;
+    }
+  }
+
+  if (groqKey) {
+    try {
+      return res.json(await requestChatCompletion({
+        provider: 'groq',
+        baseUrl: process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1',
+        apiKey: groqKey,
+        model: process.env.GROQ_MODEL || 'qwen/qwen3.8-27b',
+        messages: providerMessages
+      }));
+    } catch (error) {
+      return res.status(502).json({
+        error: `Chat providers failed: ${openRouterError?.message || 'OpenRouter is unavailable.'} ${error.message}`
+      });
+    }
+  }
+
+  res.status(502).json({
+    error: openRouterError?.message || 'OpenRouter is unavailable.'
+  });
+});
+
 app.get('/api/news', async (req, res) => {
   if (
     req.query.refresh !== '1' &&
@@ -416,6 +710,299 @@ app.get('/api/news', async (req, res) => {
   } catch (error) {
     res.status(502).json({
       error: `News refresh failed: ${error.message}`
+    });
+  }
+});
+
+const getContentSetting = key =>
+  db.prepare('SELECT value FROM content_settings WHERE key = ?').get(key)?.value;
+
+const getContentStatus = () => {
+  const scheduledToday = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM content_posts
+    WHERE status IN ('scheduled', 'published')
+      AND date(CASE WHEN status = 'published' THEN published_at ELSE scheduled_at END) = date('now')
+  `).get().count;
+  const telegramAutoReply = getContentSetting('telegram_auto_reply') === 'true';
+  const telegramAutoReplyTemplate = getContentSetting('telegram_auto_reply_template') || '';
+  const linkedinConnected = Boolean(
+    process.env.LINKEDIN_ACCESS_TOKEN && process.env.LINKEDIN_AUTHOR_URN
+  );
+  const telegramConnected = Boolean(
+    process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID
+  );
+
+  return {
+    platforms: {
+      linkedin: {
+        connected: linkedinConnected,
+        detail: linkedinConnected
+          ? 'LinkedIn publishing is configured.'
+          : 'Add LinkedIn publishing credentials in Render.'
+      },
+      telegram: {
+        connected: telegramConnected,
+        detail: telegramConnected
+          ? 'Telegram publishing is configured.'
+          : 'Add a Telegram bot token and chat ID in Render.'
+      }
+    },
+    scheduledToday,
+    dailyLimit: 10,
+    telegramAutoReply,
+    telegramAutoReplyTemplate
+  };
+};
+
+app.get('/api/content/status', (_req, res) =>
+  res.json(getContentStatus())
+);
+
+app.get('/api/content/posts', (_req, res) => {
+  res.json(db.prepare(
+    'SELECT * FROM content_posts ORDER BY created_at DESC'
+  ).all());
+});
+
+app.get('/api/content/notifications', (_req, res) => {
+  const notifications = db.prepare(
+    'SELECT * FROM social_notifications ORDER BY created_at DESC LIMIT 100'
+  ).all();
+
+  res.json(notifications.map(notification => ({
+    ...notification,
+    auto_replied: Boolean(notification.auto_replied)
+  })));
+});
+
+app.post('/api/content/settings', (req, res) => {
+  const { telegramAutoReply, telegramAutoReplyTemplate } = req.body || {};
+
+  if (typeof telegramAutoReply !== 'boolean') {
+    return res.status(400).json({
+      error: 'telegramAutoReply must be a boolean.'
+    });
+  }
+
+  const template = String(telegramAutoReplyTemplate || '').slice(0, 2000);
+  const saveSetting = db.prepare(`
+    INSERT INTO content_settings (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `);
+
+  saveSetting.run('telegram_auto_reply', String(telegramAutoReply));
+  saveSetting.run('telegram_auto_reply_template', template);
+  log('Telegram reply settings updated', 'integration', 'telegram', {
+    autoReply: telegramAutoReply
+  });
+
+  res.json(getContentStatus());
+});
+
+app.post('/api/content/posts', (req, res) => {
+  const content = String(req.body?.content || '').trim();
+  const platform = String(req.body?.platform || '');
+  const action = String(req.body?.action || 'draft');
+
+  if (!content || content.length > 10000) {
+    return res.status(400).json({
+      error: 'Post content is required and must be 10,000 characters or fewer.'
+    });
+  }
+
+  if (!['linkedin', 'telegram'].includes(platform)) {
+    return res.status(400).json({
+      error: 'Choose LinkedIn or Telegram as the publishing platform.'
+    });
+  }
+
+  if (!['draft', 'schedule'].includes(action)) {
+    return res.status(400).json({
+      error: 'Post action must be draft or schedule.'
+    });
+  }
+
+  let scheduledAt = null;
+
+  if (action === 'schedule') {
+    const requestedTime = Date.parse(req.body?.scheduledAt || '');
+
+    if (!Number.isFinite(requestedTime) || requestedTime <= Date.now()) {
+      return res.status(400).json({
+        error: 'Choose a valid future date and time to schedule this post.'
+      });
+    }
+
+    scheduledAt = new Date(requestedTime).toISOString();
+    const scheduledCount = db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM content_posts
+      WHERE status IN ('scheduled', 'published')
+        AND date(CASE WHEN status = 'published' THEN published_at ELSE scheduled_at END) = date(?)
+    `).get(scheduledAt).count;
+
+    if (scheduledCount >= 10) {
+      return res.status(429).json({
+        error: 'The daily limit of 10 scheduled or published posts has been reached.'
+      });
+    }
+  }
+
+  const id = crypto.randomUUID();
+  const timestamp = now();
+  const status = action === 'schedule' ? 'scheduled' : 'draft';
+
+  db.prepare(`
+    INSERT INTO content_posts (
+      id, platform, content, status, scheduled_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, platform, content, status, scheduledAt, timestamp, timestamp);
+
+  log(action === 'schedule' ? 'Content post scheduled' : 'Content draft saved', 'content_post', id, {
+    platform,
+    scheduledAt
+  });
+
+  res.status(201).json(
+    db.prepare('SELECT * FROM content_posts WHERE id = ?').get(id)
+  );
+});
+
+app.delete('/api/content/posts/:id', (req, res) => {
+  const result = db.prepare(
+    'DELETE FROM content_posts WHERE id = ?'
+  ).run(req.params.id);
+
+  if (!result.changes) {
+    return res.status(404).json({ error: 'Content post not found.' });
+  }
+
+  log('Content post removed', 'content_post', req.params.id);
+  res.json({ deleted: true, id: req.params.id });
+});
+
+app.post('/api/content/notifications/:id/read', (req, res) => {
+  const result = db.prepare(`
+    UPDATE social_notifications SET read_at = ? WHERE id = ?
+  `).run(now(), req.params.id);
+
+  if (!result.changes) {
+    return res.status(404).json({ error: 'Notification not found.' });
+  }
+
+  res.json({ id: req.params.id, read: true });
+});
+
+app.post('/api/content/posts/:id/publish', async (req, res) => {
+  const post = db.prepare(
+    'SELECT * FROM content_posts WHERE id = ?'
+  ).get(req.params.id);
+
+  if (!post) {
+    return res.status(404).json({ error: 'Content post not found.' });
+  }
+
+  if (post.status === 'published') {
+    return res.status(409).json({ error: 'This post has already been published.' });
+  }
+
+  let endpoint;
+  let requestBody;
+  let requestHeaders = { 'content-type': 'application/json' };
+
+  if (post.platform === 'telegram') {
+    if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
+      return res.status(503).json({
+        error: 'Configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in Render before publishing.'
+      });
+    }
+
+    endpoint = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+    requestBody = {
+      chat_id: process.env.TELEGRAM_CHAT_ID,
+      text: post.content
+    };
+  } else {
+    if (!process.env.LINKEDIN_ACCESS_TOKEN || !process.env.LINKEDIN_AUTHOR_URN) {
+      return res.status(503).json({
+        error: 'Configure LINKEDIN_ACCESS_TOKEN and LINKEDIN_AUTHOR_URN in Render before publishing.'
+      });
+    }
+
+    endpoint = 'https://api.linkedin.com/rest/posts';
+    requestHeaders = {
+      ...requestHeaders,
+      authorization: `Bearer ${process.env.LINKEDIN_ACCESS_TOKEN}`,
+      'LinkedIn-Version': process.env.LINKEDIN_API_VERSION || '202609',
+      'X-Restli-Protocol-Version': '2.0.0'
+    };
+    requestBody = {
+      author: process.env.LINKEDIN_AUTHOR_URN,
+      commentary: post.content,
+      visibility: 'PUBLIC',
+      distribution: {
+        feedDistribution: 'MAIN_FEED',
+        targetEntities: []
+      },
+      lifecycleState: 'PUBLISHED',
+      isReshareDisabledByAuthor: false
+    };
+  }
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: requestHeaders,
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(30000)
+    });
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      throw new Error(responseText || `Platform returned HTTP ${response.status}.`);
+    }
+
+    let platformPostId = response.headers.get('x-restli-id') || '';
+
+    if (post.platform === 'telegram') {
+      const result = JSON.parse(responseText);
+
+      if (!result.ok) {
+        throw new Error(result.description || 'Telegram rejected the post.');
+      }
+
+      platformPostId = String(result.result?.message_id || '');
+    }
+
+    const timestamp = now();
+    db.prepare(`
+      UPDATE content_posts
+      SET status = 'published', published_at = ?, platform_post_id = ?, error = '', updated_at = ?
+      WHERE id = ?
+    `).run(timestamp, platformPostId, timestamp, post.id);
+    log('Content post published', 'content_post', post.id, {
+      platform: post.platform,
+      platformPostId
+    });
+
+    res.json({
+      id: post.id,
+      status: 'published',
+      platformPostId
+    });
+  } catch (error) {
+    const timestamp = now();
+    db.prepare(`
+      UPDATE content_posts SET status = 'failed', error = ?, updated_at = ? WHERE id = ?
+    `).run(error.message.slice(0, 1000), timestamp, post.id);
+    log('Content post publication failed', 'content_post', post.id, {
+      platform: post.platform,
+      error: error.message
+    });
+
+    res.status(502).json({
+      error: `Post could not be published: ${error.message}`
     });
   }
 });
@@ -475,6 +1062,98 @@ const getRecentEmailContext = async question => {
     messages
   };
 };
+
+app.get('/auth/google/start', (req, res) => {
+  if (!hasGoogleOAuth()) {
+    return res.status(503).json({
+      error: 'Configure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Render before connecting Gmail.'
+    });
+  }
+
+  const state = crypto.randomUUID();
+  googleAuthStates.add(state);
+  const callbackUrl = process.env.GOOGLE_REDIRECT_URI ||
+    `${req.get('x-forwarded-proto') || req.protocol}://${req.get('host')}/auth/google/callback`;
+  const authorizationUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+
+  authorizationUrl.search = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID,
+    redirect_uri: callbackUrl,
+    response_type: 'code',
+    scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
+    access_type: 'offline',
+    include_granted_scopes: 'true',
+    prompt: 'consent',
+    state
+  }).toString();
+
+  res.redirect(authorizationUrl.toString());
+});
+
+app.get('/auth/google/callback', async (req, res) => {
+  const state = String(req.query.state || '');
+
+  if (req.query.error) {
+    return res.redirect(gmailRedirect('denied'));
+  }
+
+  if (!state || !googleAuthStates.delete(state) || !req.query.code) {
+    return res.redirect(gmailRedirect('invalid_state'));
+  }
+
+  if (!hasGoogleOAuth()) {
+    return res.redirect(gmailRedirect('not_configured'));
+  }
+
+  const callbackUrl = process.env.GOOGLE_REDIRECT_URI ||
+    `${req.get('x-forwarded-proto') || req.protocol}://${req.get('host')}/auth/google/callback`;
+
+  try {
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code: String(req.query.code),
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: callbackUrl,
+        grant_type: 'authorization_code'
+      }),
+      signal: AbortSignal.timeout(20000)
+    });
+    const tokens = await response.json();
+
+    if (!response.ok || !tokens.access_token) {
+      return res.redirect(gmailRedirect('error'));
+    }
+
+    googleToken = {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token || googleToken?.refreshToken || '',
+      expiresAt: Date.now() + Number(tokens.expires_in || 3600) * 1000
+    };
+    const timestamp = now();
+
+    db.prepare(`
+      INSERT INTO integrations (id, provider, status, permissions, created_at, updated_at)
+      VALUES (?, 'gmail', 'connected', ?, ?, ?)
+      ON CONFLICT(provider) DO UPDATE SET
+        status = 'connected',
+        permissions = excluded.permissions,
+        updated_at = excluded.updated_at
+    `).run(
+      crypto.randomUUID(),
+      JSON.stringify(['gmail.readonly', 'gmail.send']),
+      timestamp,
+      timestamp
+    );
+    log('Gmail connected', 'integration', 'gmail');
+
+    res.redirect(gmailRedirect('connected'));
+  } catch {
+    res.redirect(gmailRedirect('error'));
+  }
+});
 
 /*
  * The remainder of the original server.js continues below.
