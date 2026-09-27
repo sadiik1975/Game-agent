@@ -218,7 +218,7 @@ const app = express();
  * Allows the Netlify frontend to communicate with this API.
  */
 app.use(cors({
-  origin: ['https://nexus1ai.netlify.app'],
+  origin: process.env.WEB_ORIGIN || 'https://nexus1ai.netlify.app',
   credentials: true
 }));
 
@@ -1040,20 +1040,3 @@ const server = app.listen(
       `Central Orchestrator API listening on http://localhost:${port}`
     )
 );
-
-const contentScheduler = setInterval(
-  () =>
-    processDueContentPosts()
-      .catch(() => {}),
-  15000
-);
-
-const telegramUpdates = setInterval(
-  () =>
-    pollTelegramReplies()
-      .catch(() => {}),
-  15000
-);
-
-contentScheduler.unref();
-telegramUpdates.unref();

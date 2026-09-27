@@ -52,6 +52,24 @@ http://localhost:8787/api/health
 
 The database is created automatically at `server/data/central-orchestrator.db`.
 
+## Deploy on Render with a Netlify frontend
+
+Create a Render **Web Service** for this repository with these settings:
+
+- Root Directory: `server`
+- Build Command: `npm ci`
+- Start Command: `npm start`
+- Environment variable `WEB_ORIGIN`: your exact Netlify site origin, for example `https://nexus1ai.netlify.app`
+- Environment variable `WEB_APP_URL`: your Netlify site URL ending in `/app/`, for example `https://nexus1ai.netlify.app/app/`
+
+The backend pins Node 24 because it uses the built-in `node:sqlite` module. After Render creates the service, copy its `https://...onrender.com` URL. In `index.html`, set the `api-base-url` meta tag to that URL plus `/api`, for example:
+
+```html
+<meta name="api-base-url" content="https://your-service.onrender.com/api">
+```
+
+Redeploy the Netlify site after changing the tag. Check the backend directly at `https://your-service.onrender.com/api/health`; it should return JSON with status `ok`.
+
 ## Environment file
 
 The template is [server/.env.example](server/.env.example). Copy it to `server/.env`.

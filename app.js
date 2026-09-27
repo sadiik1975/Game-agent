@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'my-personal-business-agent-v1';
 const DEFAULT_ACCENT = '#10a7a0';
-const API_BASE = window.location.port === '4173' ? `${window.location.protocol}//${window.location.hostname}:8787/api` : '/api';
+const configuredApiBase = document.querySelector('meta[name="api-base-url"]')?.content.trim();
+const API_BASE = configuredApiBase || (window.location.port === '4173' ? `${window.location.protocol}//${window.location.hostname}:8787/api` : '/api');
 
 const initialState = {
   workflows: [],
