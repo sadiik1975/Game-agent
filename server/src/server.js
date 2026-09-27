@@ -371,12 +371,7 @@ const refreshNews = async () => {
 };
 
 app.get('/', (_req, res) =>
-  res.json({
-    service: 'central-orchestrator',
-    status: 'running',
-    health: '/api/health',
-    dashboard: 'file:///D:/apps/game-agent-ai/index.html'
-  })
+  res.redirect('/app/')
 );
 
 app.get('/api/health', (_req, res) =>
