@@ -566,9 +566,24 @@ const requestChatCompletion = async ({
   model,
   messages
 }) => {
-  const response = await fetch(
-    `${baseUrl.replace(/\/+$/, '')}/chat/completions`,
-    {
+  let endpoint;
+
+  try {
+    endpoint = new URL(
+      `${baseUrl.replace(/\/+$/, '')}/chat/completions`
+    );
+  } catch {
+    throw new Error(`${provider} API URL is invalid.`);
+  }
+
+  if (endpoint.protocol !== 'https:') {
+    throw new Error(`${provider} API URL must use HTTPS.`);
+  }
+
+  let response;
+
+  try {
+    response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${apiKey}`,
@@ -580,15 +595,15 @@ const requestChatCompletion = async ({
       },
       body: JSON.stringify({ model, messages }),
       signal: AbortSignal.timeout(55000)
-    }
-  );
+    });
+  } catch {
+    throw new Error(`${provider} request failed. Check its URL and network settings.`);
+  }
 
   const result = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(
-      result.error?.message || `${provider} returned HTTP ${response.status}.`
-    );
+    throw new Error(`${provider} returned HTTP ${response.status}.`);
   }
 
   const text = result.choices?.[0]?.message?.content;
