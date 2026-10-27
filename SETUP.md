@@ -1,6 +1,6 @@
 # Game Builder Agent
 
-The app is one chat page. Tell it which game you are making (Fortnite or Roblox) and describe the feature in ordinary language. For builds and fixes it returns a build sheet, editor-ready code with placement instructions, and an asset list. No terminal commands are needed to use the deployed chat.
+The app is one chat page. Tell it which game you are making (Fortnite, Roblox, standalone Unreal Engine 5, or Unity) and describe the feature in ordinary language. For builds and fixes it returns a build sheet, editor-ready code with placement instructions, and an asset list. The Unreal Engine and Unity chapters are drafts; each becomes official only after a real build session using it and editor approval. No terminal commands are needed to use the deployed chat.
 
 ## Run locally
 
@@ -63,7 +63,7 @@ Create an xAI API key in the xAI API Console, then add it as the value for `XAI_
 - **Fortnite:** The agent provides Verse and UEFN steps for the user to perform. It cannot access or publish islands; publishing is done manually in Creator Portal.
 - **GitHub:** Generated build notes and source code are committed to the configured repository when the user requests it.
 
-Game knowledge lives in JSON manual packs under `game-manuals/`. A new game can be added by adding a pack with its aliases, language, file extension, and instructions.
+Game knowledge lives in JSON manual packs under `game-manuals/`. A new game can be added by adding a pack with its aliases, language, file extension, and instructions. Unreal Engine is the standalone C++/Blueprint editor, not UEFN; do not use its manual for Fortnite. Unity is a separate C# engine.
 
 The chat keeps its conversation in the browser. The server does not save chat history or generated files to its local filesystem. Roblox approvals are temporary in-memory state; durable code artifacts go to GitHub.
 

@@ -11,7 +11,9 @@ import {
 
 const manuals = [
   { id: 'roblox', aliases: ['roblox', 'roblox studio'] },
-  { id: 'fortnite', aliases: ['fortnite', 'uefn', 'verse'] }
+  { id: 'fortnite', aliases: ['fortnite', 'uefn', 'verse'] },
+  { id: 'unreal', aliases: ['unreal engine', 'unreal', 'ue5', 'ue 5'] },
+  { id: 'unity', aliases: ['unity', 'unity engine'] }
 ];
 
 test('detects games from user conversation without matching assistant text', () => {
@@ -24,6 +26,10 @@ test('detects games from user conversation without matching assistant text', () 
     { role: 'user', text: 'Fortnite, help me make a race track.' },
     { role: 'user', text: 'Actually Roblox.' }
   ], manuals).id, 'roblox');
+  assert.equal(detectGame([{ role: 'user', text: 'Unreal Engine 5, make a spinning pickup.' }], manuals).id, 'unreal');
+  assert.equal(detectGame([{ role: 'user', text: 'I am using UEFN and Verse.' }], manuals).id, 'fortnite');
+  assert.equal(detectGame([{ role: 'user', text: 'In Unity, make a trigger zone.' }], manuals).id, 'unity');
+  assert.equal(detectGame([{ role: 'user', text: 'Unity Engine C# game.' }], manuals).id, 'unity');
 });
 
 test('parses only complete build response objects', () => {
