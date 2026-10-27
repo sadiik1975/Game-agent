@@ -1,17 +1,24 @@
 import 'dotenv/config';
 import express from 'express';
-import cors from 'cors';
 import Parser from 'rss-parser';
 import { DatabaseSync } from 'node:sqlite';
-import fs from 'node:fs';
+import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  buildGameSystemPrompt,
+  detectGame,
+  getConfiguredChatProviders,
+  loadGameManuals,
+  parseBuildResponse,
+  redactSecrets,
+  slugify,
+  validateRobloxAction
+} from './game-builder.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const serverRoot = path.resolve(__dirname, '..');
-const databaseFile = path.resolve(serverRoot, process.env.DATABASE_FILE || './data/central-orchestrator.db');
-fs.mkdirSync(path.dirname(databaseFile), { recursive: true });
-const db = new DatabaseSync(databaseFile);
+const db = new DatabaseSync(':memory:');
 
 db.exec('PRAGMA journal_mode = WAL');
 
@@ -228,17 +235,36 @@ const collectGmailContent = (
 };
 
 const app = express();
+app.use((req, res, next) => {
+  if (req.path === '/health' || req.path === '/api/health') return next();
 
-/*
- * CORS CONFIGURATION
- * Allows the Netlify frontend to communicate with this API.
- */
-app.use(cors({
-  origin: process.env.WEB_ORIGIN || 'https://nexus1ai.netlify.app',
-  credentials: true
-}));
+  const expectedPassword = process.env.APP_ACCESS_PASSWORD;
+  if (process.env.NODE_ENV === 'production' && !expectedPassword) {
+    return res.status(503).json({
+      error: 'Set APP_ACCESS_PASSWORD in the server environment before enabling the public app.'
+    });
+  }
+  if (!expectedPassword) return next();
 
-app.use(express.json());
+  const authorization = req.get('authorization') || '';
+  const encodedCredentials = authorization.match(/^Basic\s+(.+)$/i)?.[1];
+  if (encodedCredentials) {
+    const credentials = Buffer.from(encodedCredentials, 'base64').toString('utf8');
+    const separator = credentials.indexOf(':');
+    const username = separator >= 0 ? credentials.slice(0, separator) : '';
+    const password = separator >= 0 ? credentials.slice(separator + 1) : '';
+    const expectedUsername = 'owner';
+    const suppliedPassword = Buffer.from(password);
+    const configuredPassword = Buffer.from(expectedPassword);
+    const validPassword = suppliedPassword.length === configuredPassword.length &&
+      timingSafeEqual(suppliedPassword, configuredPassword);
+    if (username === expectedUsername && validPassword) return next();
+  }
+
+  res.set('WWW-Authenticate', 'Basic realm="Game Builder Agent", charset="UTF-8"');
+  return res.status(401).type('text').send('Authentication required.');
+});
+app.use(express.json({ limit: '400kb' }));
 
 app.use(
   '/app',
@@ -393,8 +419,8 @@ app.get('/', (_req, res) =>
 app.get('/api/health', (_req, res) =>
   res.json({
     ok: true,
-    service: 'central-orchestrator',
-    database: 'sqlite'
+    service: 'game-builder-agent',
+    status: 'ok'
   })
 );
 
@@ -621,11 +647,32 @@ const requestChatCompletion = async ({
   const text = result.choices?.[0]?.message?.content;
 
   if (typeof text !== 'string' || !text.trim()) {
-    throw new Error('OpenRouter returned an empty response.');
+    throw new Error(`${provider} returned an empty response.`);
   }
 
   return { text: text.trim(), provider };
 };
+
+async function requestConfiguredChat(messages) {
+  const providers = getConfiguredChatProviders(process.env);
+  if (!providers.length) {
+    throw new Error('Configure XAI_API_KEY, GROQ_API_KEY, or OPENROUTER_API_KEY in the server environment to enable chat.');
+  }
+
+  const failures = [];
+  for (const provider of providers) {
+    try {
+      return await requestChatCompletion({
+        ...provider,
+        baseUrl: providerBaseUrl(provider.baseUrl, provider.baseUrl),
+        messages
+      });
+    } catch (error) {
+      failures.push(`${provider.provider}: ${error.message}`);
+    }
+  }
+  throw new Error(`All configured chat providers failed. ${failures.join(' ')}`);
+}
 
 app.post('/api/chat', async (req, res) => {
   const inputMessages = Array.isArray(req.body?.messages)
@@ -656,57 +703,262 @@ app.post('/api/chat', async (req, res) => {
     },
     ...messages
   ];
-  const openRouterKey =
-    req.get('x-openrouter-api-key') || process.env.OPENROUTER_API_KEY;
-  const groqKey = process.env.GROQ_API_KEY;
+  try {
+    return res.json(await requestConfiguredChat(providerMessages));
+  } catch (error) {
+    const status = getConfiguredChatProviders(process.env).length ? 502 : 503;
+    return res.status(status).json({ error: error.message });
+  }
+});
 
-  if (!openRouterKey && !groqKey) {
+const gameManuals = loadGameManuals(
+  path.resolve(serverRoot, '..', 'game-manuals')
+);
+const pendingRobloxApprovals = new Map();
+const hasRobloxOpenCloudKey = () => Boolean(process.env.ROBLOX_OPEN_CLOUD_API_KEY);
+
+async function requestGameModel(messages) {
+  return requestConfiguredChat(messages);
+}
+
+function cleanArtifact(artifact, manual) {
+  return {
+    game: manual.id,
+    language: manual.language,
+    message: redactSecrets(artifact.message),
+    diagnosis: redactSecrets(artifact.diagnosis || ''),
+    project: slugify(artifact.project, 'game-build'),
+    placement: redactSecrets(artifact.placement),
+    code: redactSecrets(artifact.code),
+    buildSheet: artifact.buildSheet.map(item => redactSecrets(item)),
+    assetList: artifact.assetList.map(item => redactSecrets(item)),
+    liveAction: artifact.liveAction || null
+  };
+}
+
+async function robloxOpenCloudRequest(url, options = {}) {
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        'x-api-key': process.env.ROBLOX_OPEN_CLOUD_API_KEY,
+        ...(options.body ? { 'content-type': 'application/json' } : {}),
+        ...options.headers
+      },
+      signal: AbortSignal.timeout(15000)
+    });
+  } catch {
+    throw new Error('Could not reach Roblox Open Cloud. Check the server connection and try again.');
+  }
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(`Roblox Open Cloud returned HTTP ${response.status}. Check the key permissions and game identifiers.`);
+  }
+  return body;
+}
+
+app.get('/health', (_req, res) => res.status(200).type('text').send('OK'));
+
+app.post('/api/game-chat', async (req, res) => {
+  const messages = (Array.isArray(req.body?.messages) ? req.body.messages : [])
+    .filter(message =>
+      ['user', 'assistant'].includes(message?.role) &&
+      typeof (message?.text || message?.content) === 'string'
+    )
+    .slice(-24)
+    .map(message => ({
+      role: message.role,
+      content: redactSecrets(String(message.text || message.content).slice(0, 8000))
+    }));
+
+  const userMessages = messages.filter(message => message.role === 'user');
+  if (!userMessages.length) {
+    return res.status(400).json({ error: 'Tell me what you would like to build.' });
+  }
+
+  const manual = detectGame(
+    messages.map(message => ({ role: message.role, text: message.content })),
+    gameManuals
+  );
+  if (!manual) {
+    return res.json({ message: 'Which game is this for?' });
+  }
+
+  try {
+    const response = await requestGameModel([
+      { role: 'system', content: buildGameSystemPrompt(manual, hasRobloxOpenCloudKey()) },
+      ...messages
+    ]);
+    let artifact;
+    try {
+      artifact = cleanArtifact(parseBuildResponse(response.text), manual);
+    } catch {
+      return res.status(502).json({
+        error: 'The assistant returned an incomplete build. Please try asking again.'
+      });
+    }
+
+    let approval = null;
+    if (artifact.liveAction && manual.id === 'roblox') {
+      const action = validateRobloxAction(artifact.liveAction);
+      if (!action) {
+        artifact.liveAction = null;
+        artifact.message += ' I need a valid universe ID and the required action details before I can do that.';
+      } else if (!hasRobloxOpenCloudKey()) {
+        artifact.liveAction = null;
+        artifact.message += ' Roblox Open Cloud is not configured on this server yet. You can perform this action from Roblox Creator Dashboard or Studio instead.';
+      } else if (action.type === 'read_datastore') {
+        const endpoint = new URL(
+          `https://apis.roblox.com/datastores/v1/universes/${encodeURIComponent(action.universeId)}/standard-datastores/datastore/entries/entry`
+        );
+        endpoint.searchParams.set('datastoreName', action.datastoreName);
+        endpoint.searchParams.set('entryKey', action.entryKey);
+        const result = await robloxOpenCloudRequest(endpoint);
+        artifact.liveResult = JSON.stringify(result).slice(0, 12000);
+        artifact.liveAction = null;
+      } else {
+        const payload = {
+          method: 'POST',
+          url: `https://apis.roblox.com/messaging-service/v1/universes/${encodeURIComponent(action.universeId)}/topics/${encodeURIComponent(action.topic)}`,
+          body: { message: action.message }
+        };
+        const id = crypto.randomUUID();
+        pendingRobloxApprovals.set(id, {
+          payload,
+          expiresAt: Date.now() + 10 * 60 * 1000
+        });
+        approval = {
+          id,
+          description: 'This announcement will be sent only if you choose “Approve and send”.',
+          payload
+        };
+        artifact.liveAction = null;
+      }
+    }
+
+    return res.json({ message: artifact.message, artifact, approval });
+  } catch (error) {
+    return res.status(502).json({ error: error.message || 'The assistant could not complete this request.' });
+  }
+});
+
+app.post('/api/roblox/approvals/:id', async (req, res) => {
+  const approval = pendingRobloxApprovals.get(req.params.id);
+  if (!approval || approval.expiresAt < Date.now()) {
+    pendingRobloxApprovals.delete(req.params.id);
+    return res.status(404).json({ error: 'This approval expired or is no longer available. Ask the chat to prepare it again.' });
+  }
+  if (!['approve', 'reject'].includes(req.body?.decision)) {
+    return res.status(400).json({ error: 'Choose whether to approve or reject this announcement.' });
+  }
+  pendingRobloxApprovals.delete(req.params.id);
+  if (req.body.decision === 'reject') {
+    return res.json({ message: 'Announcement cancelled. Nothing was sent.' });
+  }
+  if (!hasRobloxOpenCloudKey()) {
+    return res.status(503).json({ error: 'Roblox Open Cloud is not configured on this server.' });
+  }
+
+  try {
+    await robloxOpenCloudRequest(approval.payload.url, {
+      method: approval.payload.method,
+      body: JSON.stringify(approval.payload.body)
+    });
+    return res.json({ message: 'Roblox accepted the approved announcement.' });
+  } catch (error) {
+    return res.status(502).json({ error: error.message });
+  }
+});
+
+app.post('/api/game-artifacts', async (req, res) => {
+  const token = process.env.GITHUB_TOKEN;
+  const repository = process.env.GITHUB_REPOSITORY || '';
+  if (!token || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
     return res.status(503).json({
-      error: 'Configure OPENROUTER_API_KEY or GROQ_API_KEY in Render to enable chat.'
+      error: 'GitHub saving is not configured. Set GITHUB_TOKEN and GITHUB_REPOSITORY on the server.'
     });
   }
 
-  let openRouterError;
-
-  if (openRouterKey) {
-    try {
-      return res.json(await requestChatCompletion({
-        provider: 'openrouter',
-        baseUrl: providerBaseUrl(
-          process.env.OPENROUTER_API_URL,
-          'https://openrouter.ai/api/v1'
-        ),
-        apiKey: openRouterKey,
-        model: process.env.OPENROUTER_MODEL || 'openrouter/free',
-        messages: providerMessages
-      }));
-    } catch (error) {
-      openRouterError = error;
-    }
+  const manual = gameManuals.find(game => game.id === req.body?.game);
+  const code = String(req.body?.code || '').slice(0, 100000);
+  if (!manual || !code.trim()) {
+    return res.status(400).json({ error: 'A supported game and non-empty code are required.' });
   }
+  const project = slugify(req.body?.project, 'game-build');
+  const root = `${manual.id}/${project}`;
+  const files = [
+    `${root}/build-sheet.md`,
+    `${root}/src/main${manual.extension}`
+  ];
+  const buildSheet = Array.isArray(req.body?.buildSheet)
+    ? req.body.buildSheet.map(item => `- ${redactSecrets(String(item)).slice(0, 1000)}`).join('\n')
+    : '';
+  const assets = Array.isArray(req.body?.assetList)
+    ? req.body.assetList.map(item => `- ${redactSecrets(String(item)).slice(0, 1000)}`).join('\n')
+    : '';
+  const readme = [
+    `# ${project}`,
+    '',
+    `Game: ${manual.name}`,
+    `Language: ${manual.language}`,
+    '',
+    '## Build sheet',
+    buildSheet || '- See code placement and source file.',
+    '',
+    '## Code placement',
+    redactSecrets(String(req.body?.placement || '')).slice(0, 2000),
+    '',
+    '## Asset list',
+    assets || '- No additional assets.'
+  ].join('\n');
 
-  if (groqKey) {
-    try {
-      return res.json(await requestChatCompletion({
-        provider: 'groq',
-        baseUrl: providerBaseUrl(
-          process.env.GROQ_API_URL,
-          'https://api.groq.com/openai/v1'
-        ),
-        apiKey: groqKey,
-        model: process.env.GROQ_MODEL || 'qwen/qwen3.8-27b',
-        messages: providerMessages
-      }));
-    } catch (error) {
-      return res.status(502).json({
-        error: `Chat providers failed: ${openRouterError?.message || 'OpenRouter is unavailable.'} ${error.message}`
-      });
+  const githubApi = `https://api.github.com/repos/${repository}`;
+  const githubRequest = async (endpoint, method = 'GET', body) => {
+    const response = await fetch(`${githubApi}${endpoint}`, {
+      method,
+      headers: {
+        accept: 'application/vnd.github+json',
+        authorization: `Bearer ${token}`,
+        'x-github-api-version': '2022-11-28',
+        ...(body ? { 'content-type': 'application/json' } : {})
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+      signal: AbortSignal.timeout(20000)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(`GitHub returned HTTP ${response.status}. Check repository access and branch settings.`);
     }
-  }
+    return result;
+  };
 
-  res.status(502).json({
-    error: openRouterError?.message || 'OpenRouter is unavailable.'
-  });
+  try {
+    const branch = encodeURIComponent(process.env.GITHUB_BRANCH || 'main');
+    const reference = await githubRequest(`/git/ref/heads/${branch}`);
+    const parentSha = reference.object.sha;
+    const parent = await githubRequest(`/git/commits/${parentSha}`);
+    const tree = await githubRequest('/git/trees', 'POST', {
+      base_tree: parent.tree.sha,
+      tree: [
+        { path: files[0], mode: '100644', type: 'blob', content: readme },
+        { path: files[1], mode: '100644', type: 'blob', content: redactSecrets(code) }
+      ]
+    });
+    const commit = await githubRequest('/git/commits', 'POST', {
+      message: `Save ${manual.name} game build: ${project}`,
+      tree: tree.sha,
+      parents: [parentSha]
+    });
+    await githubRequest(`/git/refs/heads/${branch}`, 'PATCH', {
+      sha: commit.sha,
+      force: false
+    });
+    return res.status(201).json({ files, commit: commit.html_url });
+  } catch (error) {
+    return res.status(502).json({ error: error.message || 'Could not save this build to GitHub.' });
+  }
 });
 
 app.get('/api/news', async (req, res) => {

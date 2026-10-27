@@ -1,106 +1,75 @@
-# Central Orchestrator Setup
+# Game Builder Agent
 
-## What is here?
+The app is one chat page. Tell it which game you are making (Fortnite or Roblox) and describe the feature in ordinary language. For builds and fixes it returns a build sheet, editor-ready code with placement instructions, and an asset list. No terminal commands are needed to use the deployed chat.
 
-This is a Node.js application with a single-page dashboard and a persistent backend. The dashboard is one HTML page because it is a command-center SPA: navigation changes the active view without opening separate HTML files.
+## Run locally
 
-## Requirements
+Requirements: Node.js 24 and npm.
 
-- Windows 10 or newer
-- Node.js LTS 24 or newer
-- npm (included with Node.js)
-
-No Python `requirements.txt` is needed. This project uses `server/package.json` for dependencies.
-
-## Run from the repository root
-
-Install the backend dependencies once, then start the app from the project root:
-
-```sh
-npm install --prefix server
-python app.py
-```
-
-Open `http://localhost:8787/app/` while the process is running. Press `Ctrl+C` in the terminal to stop it.
-
-## Start the backend
-
-Open PowerShell:
+In PowerShell:
 
 ```powershell
 cd D:\apps\game-agent-ai\server
-npm.cmd install
+npm.cmd ci
 Copy-Item .env.example .env
+```
+
+Add your xAI key to `XAI_API_KEY` in `server\.env`, then start the app. If you prefer Groq, leave `XAI_API_KEY` blank and set `GROQ_API_KEY` instead:
+
+```powershell
 npm.cmd start
 ```
 
-Keep that terminal open.
+Open `http://localhost:8787/app/`. Keep the server running while using it. The public health check is `http://localhost:8787/health` and returns `OK`.
 
-## Open the application
+The provider keys are read only by the backend. Never paste a key into chat or put one in `index.html`, `game-chat.js`, or a committed file.
 
-Use the browser URL:
+## Deploy as one Render service
 
-```text
-http://localhost:8787/app/
-```
-
-Backend health check:
-
-```text
-http://localhost:8787/api/health
-```
-
-The database is created automatically at `server/data/central-orchestrator.db`.
-
-## Deploy on Render with a Netlify frontend
-
-Create a Render **Web Service** for this repository with these settings:
+Create a Render **Web Service** connected to this GitHub repository:
 
 - Root Directory: `server`
 - Build Command: `npm ci`
 - Start Command: `npm start`
-- Environment variable `WEB_ORIGIN`: your exact Netlify site origin, for example `https://nexus1ai.netlify.app`
-- Environment variable `WEB_APP_URL`: your Netlify site URL ending in `/app/`, for example `https://nexus1ai.netlify.app/app/`
+- Health Check Path: `/health`
 
-The backend pins Node 24 because it uses the built-in `node:sqlite` module. After Render creates the service, copy its `https://...onrender.com` URL. In `index.html`, set the `api-base-url` meta tag to that URL plus `/api`, for example:
+Set `NODE_ENV=production` and a strong `APP_ACCESS_PASSWORD` in Render before deployment. The app requires HTTP Basic authentication in production (username `owner`); your browser shows its native sign-in prompt, separate from the chat. The health endpoint remains public for Render. Add `XAI_API_KEY`, `GROQ_API_KEY`, or `OPENROUTER_API_KEY` to enable chat. When more than one key is configured, the order is xAI, Groq, then OpenRouter. Redeploy after setting or changing environment variables. The service serves both the chat page and API from the same origin.
 
-```html
-<meta name="api-base-url" content="https://your-service.onrender.com/api">
-```
+Render's free service can sleep when idle and take time to wake. Use an always-on Render instance if you need reliable 24/7 availability; a periodic health ping is not a guarantee of uptime.
 
-Redeploy the Netlify site after changing the tag. Check the backend directly at `https://your-service.onrender.com/api/health`; it should return JSON with status `ok`.
+## Environment variables
 
-## Environment file
+- `XAI_API_KEY` — optional xAI API credential for Grok. xAI API usage may be billable.
+- `XAI_MODEL`, `XAI_API_URL` — optional xAI model and API URL overrides; the default model is `grok-4.20-0309-non-reasoning`.
+- `GROQ_API_KEY` — optional Groq provider credential. Groq offers free usage subject to its current limits and policies.
+- `GROQ_MODEL`, `GROQ_API_URL` — optional Groq model and API URL overrides.
+- `OPENROUTER_API_KEY` — optional fallback AI provider credential; if set, it may be used when xAI and Groq are unavailable.
+- `OPENROUTER_MODEL`, `OPENROUTER_API_URL` — optional OpenRouter model and API URL overrides.
+- `ROBLOX_OPEN_CLOUD_API_KEY` — optional Roblox Open Cloud key for DataStore reads and approved announcements. Keep it server-side and grant only the needed permissions.
+- `GITHUB_TOKEN` — optional fine-grained GitHub token with Contents read/write access to the target repository.
+- `GITHUB_REPOSITORY` — optional target repository in `owner/repository` format.
+- `GITHUB_BRANCH` — optional target branch; defaults to `main`.
+- `PORT` — assigned by Render automatically; defaults to `8787` locally.
+- `NODE_ENV` — set to `production` on Render so missing access protection fails closed.
+- `APP_ACCESS_PASSWORD` — required in production to keep the AI and owner integrations private; HTTP Basic username is `owner`.
 
-The template is [server/.env.example](server/.env.example). Copy it to `server/.env`.
+Create a local `.env` from [server/.env.example](server/.env.example). On Render, set the same values in the Environment tab; do not commit `.env`. GitHub saving is available from the “Save code to GitHub” button after setting the GitHub variables. Files are committed under `<game>/<project>/`.
 
-```env
-PORT=8787
-DATABASE_FILE=./data/central-orchestrator.db
-WEB_ORIGIN=http://localhost:8787
-WEB_APP_URL=http://localhost:8787/app/
-OPENROUTER_API_KEY=your-openrouter-api-key
-GROQ_API_KEY=your-groq-api-key
-```
+Create an xAI API key in the xAI API Console, then add it as the value for `XAI_API_KEY` in local `server\.env` or as a Render environment variable. The key can be created without being a per-request fee, but API calls are usage-billed. Check [xAI's current model pricing](https://docs.x.ai/developers/models) before enabling it; for example, the listed default `grok-4.20-0309-non-reasoning` is $1.25 per million input tokens and $2.50 per million output tokens (standard context pricing). Do not paste the key into chat, frontend files, or this repository. Restart locally or redeploy on Render after adding it. To use Groq instead, leave `XAI_API_KEY` blank and set `GROQ_API_KEY`.
 
-Add your OpenRouter API key from [OpenRouter](https://openrouter.ai/keys) and your Groq API key from [Groq Console](https://console.groq.com/keys) to `server/.env`, then restart `python app.py`. OpenRouter is tried first; Groq is used if OpenRouter is rate-limited, times out, or returns an empty reply. Each provider has its own free usage limits. The `.env` file is ignored by Git; do not put API keys in the HTML, CSS, or frontend JavaScript. The Control Center key field remains available for temporary OpenRouter use.
+## What the integrations can do
 
-Do not add other provider credentials until the corresponding OAuth integrations are configured and authorized.
+- **Roblox:** DataStore reads use Open Cloud when a server key is configured. Announcements show the exact endpoint and payload in chat and are sent only after pressing “Approve and send”. Approval requests expire after 10 minutes or a server restart. No key means the agent offers manual steps.
+- **Fortnite:** The agent provides Verse and UEFN steps for the user to perform. It cannot access or publish islands; publishing is done manually in Creator Portal.
+- **GitHub:** Generated build notes and source code are committed to the configured repository when the user requests it.
 
-For Outlook and Microsoft 365, use Microsoft Entra ID app registration and Microsoft Graph OAuth. The usual delegated permissions are `User.Read`, `Mail.Read`, `Mail.Send`, `Calendars.Read`, and `Calendars.ReadWrite`.
+Game knowledge lives in JSON manual packs under `game-manuals/`. A new game can be added by adding a pack with its aliases, language, file extension, and instructions.
 
-For Zoom, create an OAuth app in the Zoom Marketplace and register `http://localhost:8787/auth/zoom/callback` as the redirect URL. Add its client ID and secret to `server/.env`.
+The chat keeps its conversation in the browser. The server does not save chat history or generated files to its local filesystem. Roblox approvals are temporary in-memory state; durable code artifacts go to GitHub.
 
-## What can be tested now?
+## API endpoints
 
-- Dashboard navigation
-- Command bar suggestions
-- Start and pause workflow actions
-- Workflow creation
-- Persistent SQLite workflow records
-- Checkpoint retrieval
-- Activity logging
-- Light/dark theme
-- Backend health endpoint
-
-Email, calendar, Zoom, authentication, and AI provider connections remain disabled until real credentials and OAuth applications are configured.
+- `GET /health` — Render health check; responds with `OK`.
+- `POST /api/game-chat` — chat message history; requires a configured model provider.
+- `POST /api/game-artifacts` — save build notes and code to the configured GitHub repository.
+- `POST /api/roblox/approvals/:id` — approve or reject a pending Roblox announcement.
