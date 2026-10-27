@@ -239,12 +239,6 @@ app.use((req, res, next) => {
   if (req.path === '/health' || req.path === '/api/health') return next();
 
   const expectedPassword = process.env.APP_ACCESS_PASSWORD;
-  if (!expectedPassword && process.env.ALLOW_PUBLIC_ACCESS === 'true') return next();
-  if (process.env.NODE_ENV === 'production' && !expectedPassword) {
-    return res.status(503).json({
-      error: 'Set APP_ACCESS_PASSWORD in the server environment before enabling the public app.'
-    });
-  }
   if (!expectedPassword) return next();
 
   const authorization = req.get('authorization') || '';
