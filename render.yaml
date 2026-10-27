@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: game-builder-agent
+    runtime: node
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_ACCESS_PASSWORD
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false

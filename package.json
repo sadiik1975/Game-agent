@@ -1,0 +1,11 @@
+{
+  "name": "game-builder-agent-root",
+  "version": "1.0.0",
+  "private": true,
+  "engines": { "node": ">=24 <25" },
+  "scripts": {
+    "build": "npm ci --prefix server",
+    "start": "npm ci --prefix server && npm start --prefix server",
+    "test": "npm test --prefix server"
+  }
+}
