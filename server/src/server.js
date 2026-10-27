@@ -626,7 +626,7 @@ const requestChatCompletion = async ({
           'X-Title': 'Personal Business Agent'
         } : {})
       },
-      body: JSON.stringify({ model, messages }),
+      body: JSON.stringify({ model, messages, max_tokens: 4096 }),
       signal: AbortSignal.timeout(55000)
     });
   } catch {
@@ -636,7 +636,9 @@ const requestChatCompletion = async ({
   const result = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(`${provider} returned HTTP ${response.status}.`);
+    throw new Error(response.status === 429
+      ? `${provider} is rate-limited (HTTP 429); wait a minute and retry.`
+      : `${provider} returned HTTP ${response.status}.`);
   }
 
   const text = result.choices?.[0]?.message?.content;
@@ -648,7 +650,7 @@ const requestChatCompletion = async ({
   return { text: text.trim(), provider };
 };
 
-async function requestConfiguredChat(messages) {
+async function requestConfiguredChat(messages, validate) {
   const providers = getConfiguredChatProviders(process.env);
   if (!providers.length) {
     throw new Error('Configure XAI_API_KEY, GROQ_API_KEY, or OPENROUTER_API_KEY in the server environment to enable chat.');
@@ -657,13 +659,15 @@ async function requestConfiguredChat(messages) {
   const failures = [];
   for (const provider of providers) {
     try {
-      return await requestChatCompletion({
+      const completion = await requestChatCompletion({
         ...provider,
         baseUrl: providerBaseUrl(provider.baseUrl, provider.baseUrl),
         messages
       });
+      if (validate) validate(completion.text);
+      return completion;
     } catch (error) {
-      failures.push(`${provider.provider}: ${error.message}`);
+      failures.push(`${provider.provider}: ${validate && !/^\w+ (is|returned|request|API)/.test(error.message) ? 'returned an incomplete build.' : error.message}`);
     }
   }
   throw new Error(`All configured chat providers failed. ${failures.join(' ')}`);
@@ -713,7 +717,7 @@ const pendingRobloxApprovals = new Map();
 const hasRobloxOpenCloudKey = () => Boolean(process.env.ROBLOX_OPEN_CLOUD_API_KEY);
 
 async function requestGameModel(messages) {
-  return requestConfiguredChat(messages);
+  return requestConfiguredChat(messages, parseBuildResponse);
 }
 
 function cleanArtifact(artifact, manual) {

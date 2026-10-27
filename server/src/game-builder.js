@@ -42,6 +42,7 @@ export function buildGameSystemPrompt(manual, robloxKeyConfigured) {
     'For Roblox liveAction use exactly one of: {"type":"read_datastore","universeId":"...","datastoreName":"...","entryKey":"..."} or {"type":"announcement","universeId":"...","topic":"...","message":"..."}. Do not add a liveAction unless the user asks for a real live operation and supplies the needed identifiers/message. Reads may be performed immediately by the server. Writes must only be proposed for approval; never imply they were sent.',
     `Roblox Open Cloud key configured on the server: ${robloxKeyConfigured ? 'yes' : 'no'}. If a live action is requested without a configured key, explain this in message and give manual steps; do not include a liveAction.`,
     'If the user pastes an error, explain it plainly in diagnosis, then return corrected code and placement. If the user reports broken behavior, diagnosis should include a short relevant checklist before the fix.',
+    'For large requests (for example a full fighting game), do not try to build everything at once. Build a compact, working first milestone (a single script of roughly 150 lines or fewer), list the later phases in buildSheet, and offer to continue. Keep the whole JSON response under about 3500 tokens.',
     'Never ask for, repeat, or put API keys, tokens, passwords, or other credentials into your response or code. Do not repeat sensitive values from user messages.'
   ].join('\n\n');
 }
@@ -76,7 +77,10 @@ export function getConfiguredChatProviders(env) {
 }
 
 export function parseBuildResponse(raw) {
-  const content = String(raw).trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
+  let content = String(raw).trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
+  const start = content.indexOf('{');
+  const end = content.lastIndexOf('}');
+  if (start !== -1 && end > start) content = content.slice(start, end + 1);
   const artifact = JSON.parse(content);
   if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact)) {
     throw new Error('The model response was not a JSON object.');
